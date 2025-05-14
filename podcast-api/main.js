@@ -1,7 +1,14 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const mongoose = require('mongoose');
 const Parser = require('rss-parser');
 
+// Import routes
+const authRoutes = require('./routes/auth');
+const subscriptionRoutes = require('./routes/subscriptions');
+
+// Initialize Express app
 const app = express();
 const parser = new Parser({
   customFields: {
@@ -16,21 +23,33 @@ const parser = new Parser({
   }
 });
 
+// Connect to MongoDB
+mongoose.connect(process.env.MONGODB_URI)
+  .then(() => console.log('Connected to MongoDB'))
+  .catch(err => {
+    console.error('MongoDB connection error:', err);
+    process.exit(1);
+  });
+
+// Middleware
 app.use(cors());
 app.use(express.json());
 
-// In-memory storage for subscribed feeds
-const subscriptions = [];
+// Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/subscriptions', subscriptionRoutes);
 
 // Fetch podcast feed by URL
 app.get('/api/podcast', async (req, res) => {
   try {
     const { url } = req.query;
+    
     if (!url) {
       return res.status(400).json({ error: 'URL parameter is required' });
     }
     
     const feed = await parser.parseURL(url);
+    
     res.json(feed);
   } catch (error) {
     console.error('Error fetching podcast:', error);
@@ -52,9 +71,11 @@ app.get('/api/podcast/episodes', async (req, res) => {
     const episodes = feed.items.map(item => ({
       ...item,
       podcastTitle: feed.title,
-      podcastImage: feed.image?.url || feed.itunes?.image
+      podcastImage: feed.image?.url || feed.itunes?.image,
+      // Add episode-specific image if available, otherwise use podcast image
+      imageUrl: item.image?.url || feed.image?.url || feed.itunes?.image
+      // Note: itunesImage is already included from the parser customFields
     }));
-    
     res.json(episodes);
   } catch (error) {
     console.error('Error fetching episodes:', error);
@@ -62,53 +83,8 @@ app.get('/api/podcast/episodes', async (req, res) => {
   }
 });
 
-// Subscribe to a podcast feed
-app.post('/api/subscriptions', (req, res) => {
-  const { url, title, description, imageUrl, author } = req.body;
-  
-  if (!url || !title) {
-    return res.status(400).json({ error: 'URL and title are required' });
-  }
-  
-  // Check if already subscribed
-  const existingSubscription = subscriptions.find(sub => sub.url === url);
-  if (existingSubscription) {
-    return res.status(409).json({ error: 'Already subscribed to this feed' });
-  }
-  
-  // Add to subscriptions
-  const newSubscription = { 
-    id: Date.now().toString(),
-    url, 
-    title,
-    author,
-    description,
-    imageUrl,
-    addedAt: new Date()
-  };
-  
-  subscriptions.push(newSubscription);
-  res.status(201).json(newSubscription);
-});
-
-// Get all subscriptions
-app.get('/api/subscriptions', (req, res) => {
-  res.json(subscriptions);
-});
-
-// Delete a subscription
-app.delete('/api/subscriptions/:id', (req, res) => {
-  const { id } = req.params;
-  const index = subscriptions.findIndex(sub => sub.id === id);
-  
-  if (index === -1) {
-    return res.status(404).json({ error: 'Subscription not found' });
-  }
-  
-  subscriptions.splice(index, 1);
-  res.status(204).end();
-});
-
-app.listen(3001, () => {
-  console.log('Podcast API listening on port 3001');
+// Start server
+const PORT = process.env.PORT || 3001;
+app.listen(PORT, () => {
+  console.log(`Podcast API listening on port ${PORT}`);
 });

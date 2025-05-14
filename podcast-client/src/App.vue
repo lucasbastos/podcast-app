@@ -1,248 +1,360 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import PodcastSearch from './components/PodcastSearch.vue';
-import SubscriptionList from './components/SubscriptionList.vue';
-import LoadingSpinner from './components/LoadingSpinner.vue';
+import PodcastList from './components/PodcastList.vue';
 import EpisodeList from './components/EpisodeList.vue';
+import PlayerScreen from './components/PlayerScreen.vue';
+import AuthScreen from './components/AuthScreen.vue';
+import authStore from './store/auth';
 
-const API_URL = 'http://localhost:3001/api';
-const subscriptions = ref([]);
-const isLoading = ref(false);
-const searchResult = ref(null);
-const showSearchResult = ref(false);
-const subscriptionsLoading = ref(false);
-const errorMessage = ref('');
+// Authentication state
+const isAuthenticated = ref(authStore.isAuthenticated.value);
+const isLoading = ref(true);
+
+// App state
+const podcasts = ref([]);
 const episodes = ref([]);
-const episodesLoading = ref(false);
-const selectedPodcast = ref(null);
+const currentEpisode = ref(null);
+const isPlaying = ref(false);
+const currentTime = ref(0);
+const duration = ref(0);
 const showEpisodes = ref(false);
+const currentPodcast = ref(null);
+const errorMessage = ref('');
+const audio = ref(null);
+const isLoadingEpisodes = ref(false);
 
-// Fetch all subscriptions
-async function fetchSubscriptions() {
+// Check authentication on mount
+onMounted(async () => {
   try {
-    subscriptionsLoading.value = true;
-    const response = await fetch(`${API_URL}/subscriptions`);
-    const data = await response.json();
-    subscriptions.value = data;
+    if (authStore.token.value) {
+      await authStore.getCurrentUser();
+      isAuthenticated.value = authStore.isAuthenticated.value;
+      
+      // If authenticated, load subscriptions
+      if (isAuthenticated.value) {
+        await loadUserSubscriptions();
+      }
+    }
   } catch (error) {
-    console.error('Error fetching subscriptions:', error);
-    errorMessage.value = 'Failed to load your subscriptions';
+    console.error('Auth check error:', error);
   } finally {
-    subscriptionsLoading.value = false;
+    isLoading.value = false;
+  }
+  
+  // Initialize audio element
+  audio.value = new Audio();
+  
+  // Set up audio event listeners
+  audio.value.addEventListener('timeupdate', handleTimeUpdate);
+  audio.value.addEventListener('loadedmetadata', handleLoadedMetadata);
+  audio.value.addEventListener('ended', handleAudioEnded);
+  audio.value.addEventListener('error', handleAudioError);
+});
+
+// Handle successful authentication
+function handleAuthSuccess() {
+  isAuthenticated.value = true;
+  loadUserSubscriptions();
+}
+
+// Load user's podcast subscriptions
+async function loadUserSubscriptions() {
+  try {
+    const response = await fetch('http://localhost:3001/api/subscriptions', {
+      headers: {
+        ...authStore.getAuthHeader()
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to load subscriptions');
+    }
+    
+    const data = await response.json();
+    podcasts.value = data;
+  } catch (error) {
+    console.error('Error loading subscriptions:', error);
+    errorMessage.value = 'Failed to load your subscriptions';
   }
 }
 
-// Search for a podcast by RSS URL
+// Handle podcast search
 async function handleSearch(url) {
   try {
-    isLoading.value = true;
     errorMessage.value = '';
-    searchResult.value = null;
-    showSearchResult.value = false;
     
-    const response = await fetch(`${API_URL}/podcast?url=${encodeURIComponent(url)}`);
+    const response = await fetch(`http://localhost:3001/api/podcast?url=${encodeURIComponent(url)}`);
     
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'Failed to fetch podcast');
+      throw new Error('Failed to fetch podcast');
     }
     
     const data = await response.json();
     
-    // Map the response to our app's format
-    searchResult.value = {
-      url: url,
-      title: data.title,
-      description: data.description,
-      author: data.creator || data.itunes?.author,
-      imageUrl: data.image?.url || data.itunes?.image
-    };
+    // Check if already subscribed
+    const isAlreadySubscribed = podcasts.value.some(podcast => podcast.url === url);
     
-    showSearchResult.value = true;
+    if (!isAlreadySubscribed) {
+      // Subscribe to the podcast
+      await subscribeToPodcast({
+        url,
+        title: data.title,
+        description: data.description,
+        imageUrl: data.image?.url || data.itunes?.image,
+        author: data.itunes?.author || data.creator
+      });
+    }
+    
+    // Load episodes
+    await loadEpisodes(url, data.title, data.image?.url || data.itunes?.image);
   } catch (error) {
     console.error('Search error:', error);
-    errorMessage.value = error.message || 'Failed to fetch podcast data';
-  } finally {
-    isLoading.value = false;
+    errorMessage.value = 'Failed to load podcast. Please check the URL and try again.';
   }
 }
 
 // Subscribe to a podcast
-async function handleSubscribe() {
-  if (!searchResult.value) return;
-  
+async function subscribeToPodcast(podcastData) {
   try {
-    isLoading.value = true;
-    const response = await fetch(`${API_URL}/subscriptions`, {
+    const response = await fetch('http://localhost:3001/api/subscriptions', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        ...authStore.getAuthHeader()
       },
-      body: JSON.stringify(searchResult.value),
+      body: JSON.stringify(podcastData)
     });
     
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'Failed to subscribe');
+      const data = await response.json();
+      // If already subscribed, don't show error
+      if (response.status === 409) {
+        return;
+      }
+      throw new Error(data.error || 'Failed to subscribe');
     }
     
-    // Refresh subscriptions
-    await fetchSubscriptions();
-    
-    // Clear search result
-    searchResult.value = null;
-    showSearchResult.value = false;
+    const newSubscription = await response.json();
+    podcasts.value.push(newSubscription);
   } catch (error) {
-    console.error('Subscription error:', error);
+    console.error('Subscribe error:', error);
     errorMessage.value = error.message || 'Failed to subscribe to podcast';
-  } finally {
-    isLoading.value = false;
   }
 }
 
-// Unsubscribe from a podcast
-async function handleUnsubscribe(id) {
+// Load episodes for a podcast
+async function loadEpisodes(url, podcastTitle, podcastImage) {
   try {
-    const response = await fetch(`${API_URL}/subscriptions/${id}`, {
-      method: 'DELETE',
-    });
+    isLoadingEpisodes.value = true;
+    const response = await fetch(`http://localhost:3001/api/podcast/episodes?url=${encodeURIComponent(url)}`);
     
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'Failed to unsubscribe');
-    }
-    
-    // Update local state
-    subscriptions.value = subscriptions.value.filter(s => s.id !== id);
-  } catch (error) {
-    console.error('Unsubscribe error:', error);
-    errorMessage.value = error.message || 'Failed to unsubscribe from podcast';
-  }
-}
-
-// Fetch episodes for a podcast
-async function fetchEpisodes(podcast) {
-  try {
-    episodesLoading.value = true;
-    errorMessage.value = '';
-    episodes.value = [];
-    selectedPodcast.value = podcast;
-    showEpisodes.value = true;
-    
-    const response = await fetch(`${API_URL}/podcast/episodes?url=${encodeURIComponent(podcast.url)}`);
-    
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'Failed to fetch episodes');
+      throw new Error('Failed to fetch episodes');
     }
     
     const data = await response.json();
     episodes.value = data;
+    showEpisodes.value = true;
+    currentPodcast.value = { 
+      title: podcastTitle, 
+      imageUrl: podcastImage, 
+      url 
+    };
   } catch (error) {
-    console.error('Error fetching episodes:', error);
-    errorMessage.value = error.message || 'Failed to load podcast episodes';
+    console.error('Load episodes error:', error);
+    errorMessage.value = 'Failed to load episodes';
   } finally {
-    episodesLoading.value = false;
+    isLoadingEpisodes.value = false;
   }
 }
 
-// View episodes for a subscription
-function viewEpisodes(subscription) {
-  fetchEpisodes(subscription);
+// Handle podcast selection
+function handlePodcastSelect(podcast) {
+  loadEpisodes(podcast.url, podcast.title, podcast.imageUrl);
 }
 
-// Back to subscriptions
-function backToSubscriptions() {
+// Handle episode selection
+function handleEpisodeSelect(episode) {
+  currentEpisode.value = episode;
+  
+  if (audio.value) {
+    audio.value.src = episode.enclosure.url;
+    audio.value.load();
+    isPlaying.value = true;
+    audio.value.play();
+  }
+}
+
+// Handle back button
+function handleBack() {
   showEpisodes.value = false;
-  selectedPodcast.value = null;
+  currentPodcast.value = null;
+  episodes.value = [];
 }
 
-// Load subscriptions on component mount
-onMounted(() => {
-  fetchSubscriptions();
-});
+// Audio event handlers
+function handleTimeUpdate() {
+  if (audio.value) {
+    currentTime.value = audio.value.currentTime;
+  }
+}
+
+function handleLoadedMetadata() {
+  if (audio.value) {
+    duration.value = audio.value.duration;
+  }
+}
+
+function handleAudioEnded() {
+  isPlaying.value = false;
+  currentTime.value = 0;
+}
+
+function handleAudioError() {
+  console.error('Audio playback error');
+  errorMessage.value = 'Failed to play episode';
+  isPlaying.value = false;
+}
+
+// Player controls
+function togglePlay() {
+  if (!audio.value) return;
+  
+  if (isPlaying.value) {
+    audio.value.pause();
+  } else {
+    audio.value.play();
+  }
+  
+  isPlaying.value = !isPlaying.value;
+}
+
+function handleSeek(time) {
+  if (!audio.value) return;
+  
+  const newTime = audio.value.currentTime + time;
+  audio.value.currentTime = Math.max(0, Math.min(newTime, audio.value.duration));
+}
+
+// Handle logout
+function handleLogout() {
+  authStore.logout();
+  isAuthenticated.value = false;
+  podcasts.value = [];
+  episodes.value = [];
+  currentEpisode.value = null;
+  showEpisodes.value = false;
+  currentPodcast.value = null;
+  
+  if (audio.value) {
+    audio.value.pause();
+    audio.value.src = '';
+  }
+  
+  isPlaying.value = false;
+}
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-100 dark:bg-gray-900 py-8 px-4">
-    <header class="max-w-2xl mx-auto mb-8 text-center">
-      <h1 class="text-3xl font-bold text-gray-900 dark:text-white">
-        🎙️ Podcast App
-      </h1>
-      <p class="text-gray-600 dark:text-gray-400 mt-2">
-        Search, subscribe, and listen to your favorite podcasts
-      </p>
-    </header>
+  <div class="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+    <!-- Loading Screen -->
+    <div v-if="isLoading" class="min-h-screen flex items-center justify-center">
+      <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500"></div>
+    </div>
     
-    <main class="max-w-4xl mx-auto">
-      <!-- Search Component -->
-      <PodcastSearch @search="handleSearch" />
+    <!-- Auth Screen -->
+    <AuthScreen 
+      v-else-if="!isAuthenticated" 
+      @auth-success="handleAuthSuccess" 
+    />
+    
+    <!-- Main App -->
+    <div v-else class="container mx-auto px-4 py-6">
+      <!-- Header -->
+      <header class="flex justify-between items-center mb-6">
+        <div>
+          <h1 class="text-2xl font-bold">🎙️ Podcast App</h1>
+          <p class="text-sm text-gray-600 dark:text-gray-400">Your personal podcast player</p>
+        </div>
+        
+        <button 
+          @click="handleLogout"
+          class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
+        >
+          Logout
+        </button>
+      </header>
       
-      <!-- Error message -->
+      <!-- Error Message -->
       <div 
         v-if="errorMessage" 
-        class="max-w-2xl mx-auto bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 p-4 rounded-lg mb-6"
+        class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4"
       >
-        <p class="text-red-700 dark:text-red-400">{{ errorMessage }}</p>
+        <span class="block sm:inline">{{ errorMessage }}</span>
+        <span 
+          class="absolute top-0 bottom-0 right-0 px-4 py-3" 
+          @click="errorMessage = ''"
+        >
+          <svg class="fill-current h-6 w-6 text-red-500" role="button" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+            <title>Close</title>
+            <path d="M14.348 14.849a1.2 1.2 0 0 1-1.697 0L10 11.819l-2.651 3.029a1.2 1.2 0 1 1-1.697-1.697l2.758-3.15-2.759-3.152a1.2 1.2 0 1 1 1.697-1.697L10 8.183l2.651-3.031a1.2 1.2 0 1 1 1.697 1.697l-2.758 3.152 2.758 3.15a1.2 1.2 0 0 1 0 1.698z"/>
+          </svg>
+        </span>
       </div>
       
-      <!-- Search result -->
-      <div 
-        v-if="showSearchResult && searchResult" 
-        class="max-w-2xl mx-auto bg-white dark:bg-gray-800 rounded-xl shadow-md p-6 mb-8"
-      >
-        <h2 class="text-xl font-semibold text-gray-800 dark:text-white mb-4">Search Result</h2>
-        
-        <div class="flex items-start gap-4 mb-4">
-          <img 
-            v-if="searchResult.imageUrl" 
-            :src="searchResult.imageUrl" 
-            :alt="searchResult.title"
-            class="w-24 h-24 object-cover rounded-lg"
-            @error="$event.target.style.display = 'none'"
+      <!-- Main Content -->
+      <main>
+        <!-- Player Screen (if episode is selected) -->
+        <div v-if="currentEpisode">
+          <PlayerScreen 
+            :current-episode="currentEpisode"
+            :is-playing="isPlaying"
+            :current-time="currentTime"
+            :duration="duration"
+            :podcast-image="currentPodcast?.imageUrl"
+            @toggle-play="togglePlay"
+            @seek="handleSeek"
+            @back="currentEpisode = null"
           />
-          <div v-else class="w-24 h-24 bg-gray-200 dark:bg-gray-700 rounded-lg flex justify-center items-center">
-            <svg class="w-8 h-8 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"></path>
-            </svg>
-          </div>
-          
-          <div class="flex-1">
-            <h3 class="font-medium text-lg text-gray-800 dark:text-white">{{ searchResult.title }}</h3>
-            <p v-if="searchResult.author" class="text-sm text-gray-500 dark:text-gray-400">{{ searchResult.author }}</p>
-            <p class="text-sm text-gray-600 dark:text-gray-400 mt-2 line-clamp-3">
-              {{ searchResult.description || 'No description available' }}
-            </p>
-          </div>
         </div>
         
-        <div class="flex justify-end">
-          <button
-            @click="handleSubscribe"
-            :disabled="isLoading"
-            class="bg-indigo-600 text-white rounded-lg px-4 py-2 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
-          >
-            <span v-if="isLoading">Processing...</span>
-            <span v-else>Subscribe</span>
-          </button>
+        <!-- Episode List (if podcast is selected) -->
+        <div v-else-if="showEpisodes">
+          <EpisodeList 
+            :podcast="currentPodcast"
+            :episodes="episodes"
+            :isLoading="isLoadingEpisodes"
+            @episode-select="handleEpisodeSelect"
+            @back="handleBack"
+          />
         </div>
-      </div>
-      
-      <!-- Search loading -->
-      <div v-if="isLoading && !showSearchResult" class="max-w-2xl mx-auto py-8">
-        <LoadingSpinner />
-      </div>
-      
-      <!-- Subscriptions List -->
-      <SubscriptionList 
-        :subscriptions="subscriptions" 
-        :isLoading="subscriptionsLoading" 
-        @unsubscribe="handleUnsubscribe"
-      />
-    </main>
-    
-    <footer class="max-w-2xl mx-auto text-center mt-12 text-sm text-gray-500 dark:text-gray-400">
-      <p>© {{ new Date().getFullYear() }} Podcast App</p>
-    </footer>
+        
+        <!-- Podcast List and Search (Home Page) -->
+        <div v-else>
+          <PodcastSearch @search="handleSearch" />
+          
+          <PodcastList 
+            :podcasts="podcasts"
+            @podcast-select="handlePodcastSelect"
+          />
+        </div>
+      </main>
+    </div>
   </div>
 </template>
+
+<style>
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@media (prefers-color-scheme: dark) {
+  body {
+    background-color: #111827;
+    color: #f3f4f6;
+  }
+}
+</style>

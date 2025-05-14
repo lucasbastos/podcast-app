@@ -16,6 +16,7 @@ async function handleSearch() {
   try {
     isLoading.value = true;
     error.value = '';
+    console.log('Emitting search event with URL:', searchUrl.value); // Add debugging
     emit('search', searchUrl.value);
     
     // Clear the search field if search is successful
@@ -50,44 +51,30 @@ function setExampleFeed(url) {
 </script>
 
 <template>
-  <div class="w-full max-w-2xl mx-auto bg-white dark:bg-gray-800 rounded-xl shadow-md p-6 mb-8">
-    <h2 class="text-xl font-semibold text-gray-800 dark:text-white mb-4">Search for podcasts</h2>
+  <div class="w-full max-w-2xl mx-auto bg-white dark:bg-gray-800 rounded-xl shadow-md p-4 sm:p-6 mb-6 sm:mb-8">
+    <h2 class="text-lg sm:text-xl font-semibold text-gray-800 dark:text-white mb-3 sm:mb-4">Search for podcasts</h2>
     
-    <form @submit.prevent="handleSearch" class="mb-4">
-      <div class="flex flex-col sm:flex-row gap-3">
+    <form @submit.prevent="handleSearch" class="mb-3 sm:mb-4">
+      <div class="flex flex-col sm:flex-row gap-2 sm:gap-3">
         <div class="flex-1">
           <input
             v-model="searchUrl"
             type="text"
             placeholder="Enter podcast RSS feed URL"
-            class="w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white px-4 py-2"
+            class="w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white px-3 py-2 text-sm sm:text-base"
           />
         </div>
         <button
           type="submit"
           :disabled="isLoading"
-          class="bg-indigo-600 text-white rounded-lg px-4 py-2 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
+          class="bg-indigo-600 text-white rounded-lg px-4 py-2 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 text-sm sm:text-base"
         >
           <span v-if="isLoading">Searching...</span>
           <span v-else>Search</span>
         </button>
       </div>
       
-      <p v-if="error" class="mt-2 text-sm text-red-600 dark:text-red-400">{{ error }}</p>
+      <p v-if="error" class="mt-2 text-xs sm:text-sm text-red-600 dark:text-red-400">{{ error }}</p>
     </form>
-    
-    <div class="mt-4">
-      <p class="text-sm text-gray-600 dark:text-gray-400 mb-2">Try these example feeds:</p>
-      <div class="flex flex-wrap gap-2">
-        <button
-          v-for="feed in exampleFeeds"
-          :key="feed.url"
-          @click="setExampleFeed(feed.url)"
-          class="text-xs bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 px-2 py-1 rounded-full hover:bg-indigo-100 dark:hover:bg-indigo-900"
-        >
-          {{ feed.name }}
-        </button>
-      </div>
-    </div>
   </div>
 </template>

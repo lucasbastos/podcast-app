@@ -8,6 +8,7 @@ const props = defineProps({
 
 const emit = defineEmits(['remove', 'view-episodes']);
 
+
 function handleRemove() {
   emit('remove');
 }
@@ -31,7 +32,7 @@ function handleImageError(event) {
 </script>
 
 <template>
-  <div class="podcast-card flex items-center gap-4 p-3 hover:bg-gray-50 dark:hover:bg-gray-750 rounded-lg">
+  <div class="podcast-card flex flex-col sm:flex-row items-center gap-3 sm:gap-4 p-3 hover:bg-gray-50 dark:hover:bg-gray-750 rounded-lg">
     <img 
       v-if="podcast.imageUrl" 
       :src="podcast.imageUrl" 
@@ -45,22 +46,20 @@ function handleImageError(event) {
       </svg>
     </div>
     
-    <div class="flex-1 min-w-0">
-      <h3 class="font-medium text-gray-800 dark:text-white truncate">{{ podcast.title }}</h3>
-      <p v-if="podcast.author" class="text-xs text-gray-500 dark:text-gray-400 truncate">{{ podcast.author }}</p>
-      <p class="text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
-        {{ podcast.description || 'No description available' }}
-      </p>
+    <div class="flex-1 text-center sm:text-left">
+      <h3 class="text-base sm:text-lg font-medium text-gray-800 dark:text-white line-clamp-1">{{ podcast.title }}</h3>
+      <p v-if="podcast.author" class="text-xs sm:text-sm text-gray-600 dark:text-gray-400 line-clamp-1">{{ podcast.author }}</p>
     </div>
     
-    <div class="flex flex-col gap-2">
+    <div class="flex gap-2 mt-2 sm:mt-0">
       <button 
         @click="handleViewEpisodes"
-        class="text-indigo-500 hover:text-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded-full p-1"
+        class="text-indigo-600 hover:text-indigo-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded-full p-1"
         title="View episodes"
       >
         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-          <path d="M7 4a1 1 0 011-1h4a1 1 0 010 2H8a1 1 0 01-1-1zM5 8a1 1 0 011-1h8a1 1 0 010 2H6a1 1 0 01-1-1zM4 12a1 1 0 011-1h10a1 1 0 010 2H5a1 1 0 01-1-1z" />
+          <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+          <path fill-rule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd" />
         </svg>
       </button>
       
@@ -85,5 +84,11 @@ function handleImageError(event) {
 .podcast-card:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+@media (max-width: 640px) {
+  .podcast-card:hover {
+    transform: none;
+  }
 }
 </style>

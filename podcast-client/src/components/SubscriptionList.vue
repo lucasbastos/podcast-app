@@ -21,6 +21,7 @@ function handleUnsubscribe(subscriptionId) {
 }
 
 function handleViewEpisodes(subscription) {
+  console.log('handleViewEpisodes called with:', subscription);
   emit('view-episodes', subscription);
 }
 </script>
@@ -49,7 +50,8 @@ function handleViewEpisodes(subscription) {
       >
         <PodcastCard 
           :podcast="subscription" 
-          @remove="handleUnsubscribe(subscription.id)" 
+          @remove="handleUnsubscribe(subscription.id)"
+          @view-episodes="handleViewEpisodes(subscription)"
         />
       </div>
     </div>

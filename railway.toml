@@ -1,0 +1,10 @@
+[build]
+builder = "nixpacks"
+buildCommand = "cd podcast-api && npm install"
+
+[deploy]
+startCommand = "cd podcast-api && npm run railway:start"
+healthcheckPath = "/health"
+healthcheckTimeout = 300
+restartPolicyType = "on-failure"
+restartPolicyMaxRetries = 10

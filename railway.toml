@@ -6,5 +6,5 @@ buildCommand = "cd podcast-api && npm install"
 startCommand = "cd podcast-api && npm run railway:start"
 healthcheckPath = "/health"
 healthcheckTimeout = 300
-restartPolicyType = "on-failure"
+restartPolicy = "on-failure"
 restartPolicyMaxRetries = 10

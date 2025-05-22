@@ -1,0 +1,8 @@
+{
+  "restartable": "rs",
+  "ignore": [".git", "node_modules/**/node_modules"],
+  "verbose": true,
+  "watch": ["*.js", "routes/", "models/", "middleware/", "config/"],
+  "ext": "js,json,env",
+  "delay": "500"
+}

@@ -1,10 +1,11 @@
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import PodcastSearch from './components/PodcastSearch.vue';
 import PodcastList from './components/PodcastList.vue';
 import EpisodeList from './components/EpisodeList.vue';
 import PlayerScreen from './components/PlayerScreen.vue';
 import AuthScreen from './components/AuthScreen.vue';
+import AdminTools from './components/AdminTools.vue';
 import authStore from './store/auth';
 
 // Authentication state
@@ -23,6 +24,40 @@ const currentPodcast = ref(null);
 const errorMessage = ref('');
 const audio = ref(null);
 const isLoadingEpisodes = ref(false);
+const isAdmin = ref(true); // You might want to control this with actual authentication
+const currentEpisodeIndex = ref(-1);
+
+// Computed properties
+const isPlayerScreenVisible = computed(() => {
+  return currentEpisode.value && !showEpisodes.value;
+});
+
+const hasPreviousEpisode = computed(() => {
+  return currentEpisodeIndex.value > 0;
+});
+
+const hasNextEpisode = computed(() => {
+  return currentEpisodeIndex.value < episodes.value.length - 1;
+});
+
+// Show player screen
+function showPlayerScreen() {
+  showEpisodes.value = false;
+}
+
+// Play previous episode
+function playPreviousEpisode() {
+  if (hasPreviousEpisode.value) {
+    handleEpisodeSelect(episodes.value[currentEpisodeIndex.value - 1]);
+  }
+}
+
+// Play next episode
+function playNextEpisode() {
+  if (hasNextEpisode.value) {
+    handleEpisodeSelect(episodes.value[currentEpisodeIndex.value + 1]);
+  }
+}
 
 // Check authentication on mount
 onMounted(async () => {
@@ -177,12 +212,22 @@ function handlePodcastSelect(podcast) {
 // Handle episode selection
 function handleEpisodeSelect(episode) {
   currentEpisode.value = episode;
+  currentEpisodeIndex.value = episodes.value.findIndex(ep => 
+    ep.link === episode.link || ep.title === episode.title
+  );
   
+  // Start playing the episode
   if (audio.value) {
     audio.value.src = episode.enclosure.url;
     audio.value.load();
-    isPlaying.value = true;
-    audio.value.play();
+    audio.value.play()
+      .then(() => {
+        isPlaying.value = true;
+      })
+      .catch(error => {
+        console.error('Error playing audio:', error);
+        isPlaying.value = false;
+      });
   }
 }
 
@@ -257,10 +302,10 @@ function handleLogout() {
 </script>
 
 <template>
-  <div class="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+  <div class="min-h-screen bg-dark text-text-primary flex flex-col">
     <!-- Loading Screen -->
     <div v-if="isLoading" class="min-h-screen flex items-center justify-center">
-      <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500"></div>
+      <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
     </div>
     
     <!-- Auth Screen -->
@@ -270,52 +315,40 @@ function handleLogout() {
     />
     
     <!-- Main App -->
-    <div v-else class="container mx-auto px-4 py-6">
+    <div v-else class="flex flex-col h-full min-h-screen">
       <!-- Header -->
-      <header class="flex justify-between items-center mb-6">
+      <header class="sticky top-0 z-10 bg-dark px-4 py-3 border-b border-border flex justify-between items-center">
         <div>
-          <h1 class="text-2xl font-bold">🎙️ Podcast App</h1>
-          <p class="text-sm text-gray-600 dark:text-gray-400">Your personal podcast player</p>
+          <h1 class="text-xl font-bold text-text-primary">🎙️ Podcast App</h1>
         </div>
         
         <button 
           @click="handleLogout"
-          class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
+          class="p-2 text-text-secondary hover:text-primary focus:outline-none"
         >
-          Logout
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+          </svg>
         </button>
       </header>
       
-      <!-- Error Message -->
-      <div 
-        v-if="errorMessage" 
-        class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4"
-      >
-        <span class="block sm:inline">{{ errorMessage }}</span>
-        <span 
-          class="absolute top-0 bottom-0 right-0 px-4 py-3" 
-          @click="errorMessage = ''"
-        >
-          <svg class="fill-current h-6 w-6 text-red-500" role="button" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
-            <title>Close</title>
-            <path d="M14.348 14.849a1.2 1.2 0 0 1-1.697 0L10 11.819l-2.651 3.029a1.2 1.2 0 1 1-1.697-1.697l2.758-3.15-2.759-3.152a1.2 1.2 0 1 1 1.697-1.697L10 8.183l2.651-3.031a1.2 1.2 0 1 1 1.697 1.697l-2.758 3.152 2.758 3.15a1.2 1.2 0 0 1 0 1.698z"/>
-          </svg>
-        </span>
-      </div>
-      
       <!-- Main Content -->
-      <main>
+      <main class="flex-grow px-4 py-4 overflow-y-auto">
         <!-- Player Screen (if episode is selected) -->
-        <div v-if="currentEpisode">
+        <div v-if="currentEpisode" class="h-full">
           <PlayerScreen 
             :current-episode="currentEpisode"
             :is-playing="isPlaying"
             :current-time="currentTime"
             :duration="duration"
             :podcast-image="currentPodcast?.imageUrl"
+            :has-previous="hasPreviousEpisode"
+            :has-next="hasNextEpisode"
             @toggle-play="togglePlay"
             @seek="handleSeek"
             @back="currentEpisode = null"
+            @previous="playPreviousEpisode"
+            @next="playNextEpisode"
           />
         </div>
         
@@ -332,6 +365,7 @@ function handleLogout() {
         
         <!-- Podcast List and Search (Home Page) -->
         <div v-else>
+          <AdminTools v-if="isAdmin" />
           <PodcastSearch @search="handleSearch" />
           
           <PodcastList 
@@ -340,21 +374,70 @@ function handleLogout() {
           />
         </div>
       </main>
+      
+      <!-- Mini Player (if episode is playing but not in player screen) -->
+      <div 
+        v-if="currentEpisode && !isPlayerScreenVisible"
+        class="fixed bottom-0 left-0 right-0 bg-dark-lightest border-t border-border p-3 flex items-center"
+        @click="showPlayerScreen"
+      >
+        <img 
+          :src="currentPodcast?.imageUrl || 'https://via.placeholder.com/300x300?text=No+Image'" 
+          :alt="currentEpisode.title"
+          class="w-10 h-10 rounded-md mr-3"
+        />
+        <div class="flex-grow mr-3 overflow-hidden">
+          <h4 class="text-sm font-medium text-text-primary truncate">{{ currentEpisode.title }}</h4>
+          <div class="w-full bg-dark-lighter h-1 rounded-full mt-1">
+            <div 
+              class="bg-primary h-1 rounded-full" 
+              :style="{ width: `${(currentTime / duration) * 100}%` }"
+            ></div>
+          </div>
+        </div>
+        <button 
+          @click.stop="togglePlay"
+          class="p-2 rounded-full bg-primary text-light"
+        >
+          <svg v-if="isPlaying" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <svg v-else xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </button>
+      </div>
     </div>
   </div>
 </template>
 
 <style>
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  font-family: 'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background-color: #121212;
+  color: #f3f4f6;
+  margin: 0;
+  padding: 0;
+  overscroll-behavior: none;
 }
 
-@media (prefers-color-scheme: dark) {
-  body {
-    background-color: #111827;
-    color: #f3f4f6;
+/* Mobile optimizations */
+html, body, #app {
+  height: 100%;
+  overflow-x: hidden;
+}
+
+button {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* For iOS devices */
+@supports (-webkit-touch-callout: none) {
+  .min-h-screen {
+    min-height: -webkit-fill-available;
   }
 }
 </style>

@@ -5,12 +5,17 @@
   "scripts": {
     "start": "node main.js",
     "dev": "nodemon main.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "echo 'Build step not required for Node.js app'",
+    "railway:start": "NODE_ENV=production node main.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": "",
+  "description": "Podcast API for managing podcast subscriptions and episodes",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "dependencies": {
     "bcrypt": "^5.1.1",
     "cors": "^2.8.5",

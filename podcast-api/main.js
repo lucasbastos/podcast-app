@@ -24,6 +24,14 @@ const parser = new Parser({
   }
 });
 
+// Configure CORS for production
+const corsOptions = {
+  origin: process.env.NODE_ENV === 'production' 
+    ? [process.env.CLIENT_URL || 'https://podcast-client.up.railway.app'] 
+    : 'http://localhost:3000',
+  optionsSuccessStatus: 200
+};
+
 // Connect to MongoDB
 mongoose.connect(process.env.MONGODB_URI)
   .then(() => console.log('Connected to MongoDB'))
@@ -33,8 +41,13 @@ mongoose.connect(process.env.MONGODB_URI)
   });
 
 // Middleware
-app.use(cors());
+app.use(cors(corsOptions));
 app.use(express.json());
+
+// Health check endpoint for Railway
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok', environment: process.env.NODE_ENV });
+});
 
 // Routes
 app.use('/api/auth', authRoutes);
@@ -110,9 +123,14 @@ app.get('/api/podcast/episodes', async (req, res) => {
       try {
         console.log(`Fetching missing episodes for podcast base name: ${basePodcastName}`);
         
+        // Use the current host for the API call instead of hardcoded localhost
+        const apiHost = process.env.NODE_ENV === 'production' 
+          ? process.env.API_URL || 'https://podcast-api.up.railway.app' 
+          : 'http://localhost:3001';
+        
         // Fetch all missing episodes for this podcast using the base name
         const missingEpisodesResponse = await fetch(
-          `http://localhost:3001/api/missing-episodes/podcast/all?name=${encodeURIComponent(basePodcastName)}`
+          `${apiHost}/api/missing-episodes/podcast/all?name=${encodeURIComponent(basePodcastName)}`
         );
         
         if (missingEpisodesResponse.ok) {
@@ -179,6 +197,7 @@ const PORT = process.env.PORT || 3001;
 const server = app.listen(PORT, () => {
   console.log(`Podcast API listening on port ${PORT}`);
   console.log(`Server started at: ${new Date().toLocaleString()}`);
+  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
   
   // Add a message to indicate hot reloading is active
   if (process.env.NODE_ENV !== 'production') {

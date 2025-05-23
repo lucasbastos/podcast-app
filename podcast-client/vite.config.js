@@ -24,14 +24,9 @@ export default defineConfig(({ command, mode }) => {
       outDir: 'dist',
       assetsDir: 'assets',
       sourcemap: false,
-      // Improve build performance
-      minify: 'terser',
-      terserOptions: {
-        compress: {
-          drop_console: true,
-          drop_debugger: true
-        }
-      }
+      // Use esbuild for minification instead of terser
+      minify: 'esbuild',
+      target: 'es2015'
     }
   }
 })

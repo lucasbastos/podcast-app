@@ -71,8 +71,9 @@ async function updateEpisodeNumbers() {
   try {
     isUpdating.value = true;
     updateResult.value = null;
+    const apiUrl = import.meta.env.VITE_API_URL || 'https://podcast-api.up.railway.app/api';
     
-    const response = await fetch('http://localhost:3001/api/missing-episodes/update-episode-numbers', {
+    const response = await fetch(`${apiUrl}/missing-episodes/update-episode-numbers`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'

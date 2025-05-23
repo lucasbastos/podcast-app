@@ -96,7 +96,8 @@ function handleAuthSuccess() {
 // Load user's podcast subscriptions
 async function loadUserSubscriptions() {
   try {
-    const response = await fetch('http://localhost:3001/api/subscriptions', {
+    const apiUrl = import.meta.env.VITE_API_URL || 'https://podcast-api.up.railway.app/api';
+    const response = await fetch(`${apiUrl}/subscriptions`, {
       headers: {
         ...authStore.getAuthHeader()
       }
@@ -118,8 +119,9 @@ async function loadUserSubscriptions() {
 async function handleSearch(url) {
   try {
     errorMessage.value = '';
+    const apiUrl = import.meta.env.VITE_API_URL || 'https://podcast-api.up.railway.app/api';
     
-    const response = await fetch(`http://localhost:3001/api/podcast?url=${encodeURIComponent(url)}`);
+    const response = await fetch(`${apiUrl}/podcast?url=${encodeURIComponent(url)}`);
     
     if (!response.ok) {
       throw new Error('Failed to fetch podcast');
@@ -152,7 +154,8 @@ async function handleSearch(url) {
 // Subscribe to a podcast
 async function subscribeToPodcast(podcastData) {
   try {
-    const response = await fetch('http://localhost:3001/api/subscriptions', {
+    const apiUrl = import.meta.env.VITE_API_URL || 'https://podcast-api.up.railway.app/api';
+    const response = await fetch(`${apiUrl}/subscriptions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -182,7 +185,8 @@ async function subscribeToPodcast(podcastData) {
 async function loadEpisodes(url, podcastTitle, podcastImage) {
   try {
     isLoadingEpisodes.value = true;
-    const response = await fetch(`http://localhost:3001/api/podcast/episodes?url=${encodeURIComponent(url)}`);
+    const apiUrl = import.meta.env.VITE_API_URL || 'https://podcast-api.up.railway.app/api';
+    const response = await fetch(`${apiUrl}/podcast/episodes?url=${encodeURIComponent(url)}`);
     
     if (!response.ok) {
       throw new Error('Failed to fetch episodes');

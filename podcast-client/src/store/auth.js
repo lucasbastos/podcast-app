@@ -7,8 +7,8 @@ const isAuthenticated = computed(() => !!token.value);
 const isLoading = ref(false);
 const error = ref(null);
 
-// API URL
-const API_URL = 'http://localhost:3001/api';
+// API URL from environment variables
+const API_URL = import.meta.env.VITE_API_URL || 'https://podcast-api.up.railway.app/api';
 
 // Login user
 async function login(email, password) {

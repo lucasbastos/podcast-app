@@ -1,10 +1,10 @@
-[build]
-builder = "nixpacks"
-buildCommand = "cd podcast-api && npm install"
+[project]
+name = "podcast-app"
 
-[deploy]
-startCommand = "cd podcast-api && npm run railway:start"
-healthcheckPath = "/health"
-healthcheckTimeout = 300
-restartPolicy = "on-failure"
-restartPolicyMaxRetries = 10
+[services.podcast-api]
+root = "podcast-api"
+start = "npm run dev"
+
+[services.podcast-client]
+root = "podcast-client"
+start = "npm run dev"  # or `npm run build && npm run preview` for production

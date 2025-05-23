@@ -27,13 +27,26 @@ const parser = new Parser({
 // Configure CORS for production
 const corsOptions = {
   origin: process.env.NODE_ENV === 'production' 
-    ? [process.env.CLIENT_URL || 'https://podcast-client.up.railway.app'] 
+    ? [process.env.CLIENT_URL || 'https://podcast-app-production-2d0d.up.railway.app'] 
     : 'http://localhost:3000',
   optionsSuccessStatus: 200
 };
 
-// Connect to MongoDB
-mongoose.connect(process.env.MONGODB_URI)
+// Connect to MongoDB with better error handling
+console.log('MongoDB connection string available:', !!process.env.MONGODB_URI);
+console.log('Environment variables:', Object.keys(process.env).filter(key => key.includes('MONGO')));
+
+// Fallback to other MongoDB variables if MONGODB_URI is not set
+const mongoUri = process.env.MONGODB_URI || 
+                process.env.MONGO_URL || 
+                `mongodb://${process.env.MONGO_INITDB_ROOT_USERNAME}:${process.env.MONGO_INITDB_ROOT_PASSWORD}@${process.env.RAILWAY_PRIVATE_DOMAIN || 'localhost'}:27017/podcast-app?authSource=admin`;
+
+if (!mongoUri) {
+  console.error('No MongoDB connection string found in environment variables');
+  process.exit(1);
+}
+
+mongoose.connect(mongoUri)
   .then(() => console.log('Connected to MongoDB'))
   .catch(err => {
     console.error('MongoDB connection error:', err);
